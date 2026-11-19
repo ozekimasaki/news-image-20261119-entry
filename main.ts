@@ -1,4 +1,5 @@
-import { copyFileSync, existsSync, mkdirSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,13 +20,16 @@ mkdirSync(outDir, { recursive: true });
 copyFileSync(source, target);
 
 // A partial or truncated copy must never pass silently: the bytes on disk
-// have to match the shipped image exactly, or the run fails loudly.
-const wanted: number = statSync(source).size;
-const got: number = statSync(target).size;
+// have to match the shipped image exactly, or the run fails loudly. A size
+// check alone could miss a same-length corruption, so compare digests.
+const digest = (path: string): string =>
+  createHash("sha256").update(readFileSync(path)).digest("hex");
+const wanted: string = digest(source);
+const got: string = digest(target);
 if (got !== wanted) {
   throw new Error(
-    `copied entry.png is ${got} bytes, expected ${wanted} bytes; aborting`,
+    `copied entry.png digest ${got} does not match source ${wanted}; aborting`,
   );
 }
 
-console.log(`wrote ${target} (${got} bytes)`);
+console.log(`wrote ${target} (${statSync(target).size} bytes, sha256 ${got})`);
